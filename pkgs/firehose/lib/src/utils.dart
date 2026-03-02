@@ -14,6 +14,7 @@ Future<CommandResult> runCommand(
   String command, {
   List<String> args = const [],
   Directory? cwd,
+  Map<String, String>? environment,
 }) async {
   print('$command ${args.join(' ')}');
 
@@ -21,6 +22,9 @@ Future<CommandResult> runCommand(
     command,
     args,
     workingDirectory: cwd?.path,
+    environment: environment != null
+        ? {...Platform.environment, ...environment}
+        : null,
   );
 
   final buffer = StringBuffer();

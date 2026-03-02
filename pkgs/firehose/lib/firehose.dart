@@ -8,6 +8,7 @@ import 'dart:math';
 import 'package:glob/glob.dart';
 
 import 'src/github.dart';
+import 'src/oidc.dart';
 import 'src/pub.dart';
 import 'src/repo.dart';
 import 'src/utils.dart';
@@ -264,7 +265,35 @@ Saving existing comment id $existingCommentId to file ${idFile.path}''');
     await runCommand('dart', args: ['pub', 'get'], cwd: package.directory);
     print('');
 
-    final result = await _runPublish(package, dryRun: false, force: true);
+    // `flutter pub publish` does not handle GitHub Actions OIDC credentials
+    // automatically. Fetch the OIDC token and register it via
+    // `dart pub token add --env-var PUB_TOKEN` so that flutter pub publish
+    // can authenticate non-interactively.
+    String? pubToken;
+    if (useFlutter) {
+      final pub = Pub();
+      pubToken = await fetchOidcPubToken(pub.httpClient);
+      pub.close();
+
+      if (pubToken != null) {
+        print('Registering pub.dev OIDC credentials...');
+        await runCommand(
+          'dart',
+          args: [
+            'pub',
+            'token',
+            'add',
+            'https://pub.dev',
+            '--env-var',
+            'PUB_TOKEN',
+          ],
+          environment: {'PUB_TOKEN': pubToken},
+        );
+      }
+    }
+
+    final result =
+        await _runPublish(package, dryRun: false, force: true, pubToken: pubToken);
     if (result.code != 0) {
       exitCode = result.code;
     }
@@ -275,6 +304,7 @@ Saving existing comment id $existingCommentId to file ${idFile.path}''');
     Package package, {
     required bool dryRun,
     required bool force,
+    String? pubToken,
   }) async {
     String command;
     if (useFlutter) {
@@ -291,6 +321,7 @@ Saving existing comment id $existingCommentId to file ${idFile.path}''');
         if (force) '--force',
       ],
       cwd: package.directory,
+      environment: pubToken != null ? {'PUB_TOKEN': pubToken} : null,
     );
   }
 }
